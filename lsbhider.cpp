@@ -1,15 +1,17 @@
+#include <QDataStream>
+#include <QFile>
 #include "lsbhider.h"
 
 ImageLayerCursor::ImageLayerCursor(QImage *img)
 {
     image = img;
-    left = 0;
-    top = 0;
-    color = 0;
-    bit = 0;
-    pos = 0;
-    width = img->width();
-    height = img->height();
+    state.left = 0;
+    state.top = 0;
+    state.color = 0;
+    state.bit = 0;
+    state.pos = 0;
+    state.width = img->width();
+    state.height = img->height();
     lines = new QRgb*[img->height()];
     for (int i=0; i<img->height(); i++)
         lines[i] = (QRgb*)img->scanLine(i);
@@ -17,27 +19,27 @@ ImageLayerCursor::ImageLayerCursor(QImage *img)
 
 ImageLayerCursor::~ImageLayerCursor()
 {
-    delete lines;
+    delete[] lines;
 }
 
 bool ImageLayerCursor::next()
 {
-    int prev = color;
-    pos++;
-    color = (color +1) % 3;
-    if (color < prev)
+    int prev = state.color;
+    state.pos++;
+    state.color = (state.color +1) % 3;
+    if (state.color < prev)
     {
-        prev = left;
-        left = (left + 1) % width;
-        if (left < prev)
+        prev = state.left;
+        state.left = (state.left + 1) % state.width;
+        if (state.left < prev)
         {
-            prev = top;
-            top = (top + 1) % height;
-            if (top < prev)
+            prev = state.top;
+            state.top = (state.top + 1) % state.height;
+            if (state.top < prev)
             {
-                prev = bit;
-                bit = (bit + 1) % 8;
-                if (bit < prev)
+                prev = state.bit;
+                state.bit = (state.bit + 1) % 8;
+                if (state.bit < prev)
                 {
                     reset();
                     return false;
@@ -54,17 +56,17 @@ uchar ImageLayerCursor::readByte()
     for (int i=0; i<8; i++)
     {
         bool resultBit;
-        switch (color)
+        switch (state.color)
         {
         default:
         case 0:
-            resultBit = (qRed(lines[top][left]) & (1 << bit)) > 0 ? true : false;
+            resultBit = (qRed(lines[state.top][state.left]) & (1 << state.bit)) > 0 ? true : false;
             break;
         case 1:
-            resultBit = (qGreen(lines[top][left]) & (1 << bit)) > 0 ? true : false;
+            resultBit = (qGreen(lines[state.top][state.left]) & (1 << state.bit)) > 0 ? true : false;
             break;
         case 2:
-            resultBit = (qBlue(lines[top][left]) & (1 << bit)) > 0 ? true : false;
+            resultBit = (qBlue(lines[state.top][state.left]) & (1 << state.bit)) > 0 ? true : false;
             break;
         }
         if (resultBit)
@@ -81,37 +83,38 @@ bool ImageLayerCursor::writeByte(uchar b)
     {
         bool resultBit = b & (1 << i);
         int prevColor;
-        switch (color)
+        switch (state.color)
         {
         default:
         case 0:
-            prevColor = qRed(lines[top][left]);
+            prevColor = qRed(lines[state.top][state.left]);
             if (resultBit)
-                prevColor ^= int(1 << bit);
+                prevColor ^= int(1 << state.bit);
             else
-                prevColor &= ~(int(1 << bit));
-            lines[top][left] = qRgb(prevColor, qGreen(lines[top][left]), qBlue(lines[top][left]));
+                prevColor &= ~(int(1 << state.bit));
+            lines[state.top][state.left] = qRgb(prevColor, qGreen(lines[state.top][state.left]), qBlue(lines[state.top][state.left]));
             break;
         case 1:
-            prevColor = qGreen(lines[top][left]);
+            prevColor = qGreen(lines[state.top][state.left]);
             if (resultBit)
-                prevColor ^= int(1 << bit);
+                prevColor ^= int(1 << state.bit);
             else
-                prevColor &= ~(int(1 << bit));
-            lines[top][left] = qRgb(qRed(lines[top][left]), prevColor, qBlue(lines[top][left]));
+                prevColor &= ~(int(1 << state.bit));
+            lines[state.top][state.left] = qRgb(qRed(lines[state.top][state.left]), prevColor, qBlue(lines[state.top][state.left]));
             break;
         case 2:
-            prevColor = qBlue(lines[top][left]);
+            prevColor = qBlue(lines[state.top][state.left]);
             if (resultBit)
-                prevColor ^= int(1 << bit);
+                prevColor ^= int(1 << state.bit);
             else
-                prevColor &= ~(int(1 << bit));
-            lines[top][left] = qRgb(qRed(lines[top][left]), qGreen(lines[top][left]), prevColor);
+                prevColor &= ~(int(1 << state.bit));
+            lines[state.top][state.left] = qRgb(qRed(lines[state.top][state.left]), qGreen(lines[state.top][state.left]), prevColor);
             break;
         }
         if (!next())
             return false;
     }
+    return true;
 }
 
 bool ImageLayerCursor::seek(int value)
@@ -128,39 +131,149 @@ bool ImageLayerCursor::seek(int value)
 
 void ImageLayerCursor::reset()
 {
-    left = 0;
-    top = 0;
-    color = 0;
-    bit = 0;
-    pos = 0;
-    width = image->width();
-    height = image->height();
+    state.left = 0;
+    state.top = 0;
+    state.color = 0;
+    state.bit = 0;
+    state.pos = 0;
+    state.width = image->width();
+    state.height = image->height();
+}
+
+void ImageLayerCursor::cacheState(QString name)
+{
+    cache[name] = state;
+}
+
+void ImageLayerCursor::restoreState(QString name)
+{
+    if (cache.contains(name))
+        state = cache[name];
 }
 
 LSBHider::LSBHider(QObject *parent) : QObject(parent)
 {
+    cursor = 0;
+    image = 0;
+}
 
+void LSBHider::loadBackGround(QString filename)
+{
+    image = new QImage(filename, "PNG");
+    cursor = new ImageLayerCursor(image);
+    QByteArray data;
+    for (int i = 0; i < 32768; i++)
+    {
+        data.append(cursor->readByte());
+    }
+    header = LSBHiderFileSystem::fromByteArray(data);
+}
+
+void LSBHider::cacheFiles()
+{
+    cursor->reset();
+    for (auto i = header.filePointers.begin(); i != header.filePointers.end(); ++i)
+    {
+        cursor->seek((*i).pointer);
+        cursor->cacheState((*i).name);
+        cursor->reset();
+    }
+}
+
+bool LSBHider::addFile(QString filename)
+{
+    QByteArray data;
+    QFile file(filename);
+    file.open(QFile::ReadOnly);
+    data.append(file.readAll());
+    file.close();
+    return writeData(data, filename);
+}
+
+bool LSBHider::writeData(QByteArray data, QString name)
+{
+    header.addFile(name,data.size());
+    header.buildHeader();
+    int pointer = header.getFilePointer(name);
+    cursor->reset();
+    cursor->seek(pointer);
+    cursor->cacheState(name);
+    for (int i = 0; i< data.count(); i++)
+    {
+        if (!cursor->writeByte(data[i]))
+        {
+            header.removeFile(name);
+            return false;
+        }
+    }
+    return true;
+}
+
+void LSBHider::save(QString filename)
+{
+    cursor->reset();
+    QByteArray headerData = header.toByteArray();
+    for (int i=0; i < headerData.size(); i++)
+        cursor->writeByte(headerData[i]);
+    image->save(filename, "PNG");
+}
+
+QByteArray LSBHider::readData(QString name)
+{
+    QByteArray result;
+    foreach (const LSBHiderFileSystem::DataDesc &dd, header.filePointers)
+        if (dd.name == name)
+        {
+            int size = dd.size;
+            int pointer = dd.pointer;
+            cursor->reset();
+            cursor->seek(pointer);
+            for (int i = 0; i<size; i++)
+                result.append(cursor->readByte());
+        }
+    return result;
+}
+
+LSBHider::~LSBHider()
+{
+    if (image)
+        delete image;
+    if (cursor)
+        delete cursor;
 }
 
 
 LSBHiderFileSystem LSBHiderFileSystem::fromByteArray(QByteArray data)
 {
-
+    LSBHiderFileSystem result;
+    QDataStream ds(&data, QIODevice::ReadOnly);
+    int givenMagic = 0;
+    ds >> givenMagic;
+    if (result.magic != givenMagic)
+        return result;
+    int cnt;
+    ds >> cnt;
+    for (int i=0; i<cnt; i++)
+    {
+        DataDesc dd;
+        ds >> dd.name;
+        ds >> dd.pointer;
+        ds >> dd.size;
+        result.filePointers.append(dd);
+    }
+    return result;
 }
 
 QByteArray LSBHiderFileSystem::toByteArray()
 {
     QByteArray result;
+    QDataStream ds(&result, QIODevice::WriteOnly);
     buildHeader();
-    result.append(QByteArray::number(magic));
-    QList<QString> keys = filePointers.keys();
-    foreach (const QString &key, keys)
+    ds << magic;
+    ds << filePointers.count();
+    foreach (const DataDesc & dd, filePointers)
     {
-        DataDesc dd = filePointers[key];
-        result.append(QByteArray::number(key.length())); //32
-        result.append(key.toLocal8Bit());
-        result.append(dd.pointer);
-        result.append(dd.size);
+        ds << dd.name << dd.pointer << dd.size;
     }
     return result;
 }
@@ -170,23 +283,49 @@ void LSBHiderFileSystem::addFile(QString name, uint size)
     DataDesc dd;
     dd.pointer = 0;
     dd.size = size;
-    filePointers[name] = dd;
+    dd.name = name;
+    for (int i = 0; i< filePointers.count(); ++i)
+        if (filePointers[i].name == name)
+        {
+            filePointers.removeAt(i);
+            break;
+        }
+    filePointers.append(dd);
 }
 
 void LSBHiderFileSystem::removeFile(QString name)
 {
-    filePointers.remove(name);
+    for (int i = 0; i< filePointers.count(); ++i)
+        if (filePointers[i].name == name)
+        {
+            filePointers.removeAt(i);
+            break;
+        }
 }
 
 void LSBHiderFileSystem::buildHeader()
 {
-    int initialPointer = 32;
-    QList<QString> keys = filePointers.keys();
-    foreach (const QString &key, keys)
+    int initialPointer = 64;
+    foreach (const DataDesc & dd, filePointers)
     {
-        filePointers[key].pointer = initialPointer;
-        initialPointer += filePointers[key].size * 8;
-        initialPointer += 96;
-        initialPointer += key.toLocal8Bit().length();
+        initialPointer += 32;
+        initialPointer += dd.name.size() * 2 * 8;
+        initialPointer += sizeof(dd.pointer) * 8;
+        initialPointer += sizeof(dd.size) * 8;
     }
+
+    for (auto i = filePointers.begin(); i!= filePointers.end(); ++i)
+    {
+        (*i).pointer = initialPointer;
+        initialPointer += (*i).size * 8;
+    }
+}
+
+int LSBHiderFileSystem::getFilePointer(QString name)
+{
+    buildHeader();
+    for (int i = 0; i< filePointers.count(); ++i)
+        if (filePointers[i].name == name)
+            return filePointers[i].pointer;
+    return -1;
 }

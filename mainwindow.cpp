@@ -5,6 +5,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "diffimage.h"
+#include "lsbhider.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -75,4 +76,14 @@ void MainWindow::on_pushButton_4_clicked()
 {
     diff = QImage("diff.png","PNG");
     out = DiffImage::recoverQuantDeltaEncoded(diff,4);
+}
+
+void MainWindow::on_pushButton_5_clicked()
+{
+    LSBHider lsbHider(this);
+    lsbHider.loadBackGround("file.png");
+    lsbHider.addFile("1.jpg");
+    lsbHider.save("super.png");
+
+    lsbHider.loadBackGround("super.png");
 }

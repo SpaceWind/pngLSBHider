@@ -113,6 +113,13 @@
       </property>
      </widget>
     </item>
+    <item row="2" column="3" colspan="2">
+     <widget class="QPushButton" name="pushButton_5">
+      <property name="text">
+       <string>PushButton</string>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menuBar">
@@ -121,7 +128,7 @@
      <x>0</x>
      <y>0</y>
      <width>903</width>
-     <height>21</height>
+     <height>25</height>
     </rect>
    </property>
   </widget>
