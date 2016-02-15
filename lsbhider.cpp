@@ -89,7 +89,7 @@ bool ImageLayerCursor::writeByte(uchar b)
         case 0:
             prevColor = qRed(lines[state.top][state.left]);
             if (resultBit)
-                prevColor ^= int(1 << state.bit);
+                prevColor |= int(1 << state.bit);
             else
                 prevColor &= ~(int(1 << state.bit));
             lines[state.top][state.left] = qRgb(prevColor, qGreen(lines[state.top][state.left]), qBlue(lines[state.top][state.left]));
@@ -97,7 +97,7 @@ bool ImageLayerCursor::writeByte(uchar b)
         case 1:
             prevColor = qGreen(lines[state.top][state.left]);
             if (resultBit)
-                prevColor ^= int(1 << state.bit);
+                prevColor |= int(1 << state.bit);
             else
                 prevColor &= ~(int(1 << state.bit));
             lines[state.top][state.left] = qRgb(qRed(lines[state.top][state.left]), prevColor, qBlue(lines[state.top][state.left]));
@@ -105,7 +105,7 @@ bool ImageLayerCursor::writeByte(uchar b)
         case 2:
             prevColor = qBlue(lines[state.top][state.left]);
             if (resultBit)
-                prevColor ^= int(1 << state.bit);
+                prevColor |= int(1 << state.bit);
             else
                 prevColor &= ~(int(1 << state.bit));
             lines[state.top][state.left] = qRgb(qRed(lines[state.top][state.left]), qGreen(lines[state.top][state.left]), prevColor);
@@ -161,6 +161,7 @@ void LSBHider::loadBackGround(QString filename)
 {
     image = new QImage(filename, "PNG");
     cursor = new ImageLayerCursor(image);
+    cursor->reset();
     QByteArray data;
     for (int i = 0; i < 32768; i++)
     {
@@ -247,7 +248,7 @@ LSBHiderFileSystem LSBHiderFileSystem::fromByteArray(QByteArray data)
 {
     LSBHiderFileSystem result;
     QDataStream ds(&data, QIODevice::ReadOnly);
-    int givenMagic = 0;
+    uint givenMagic = 0;
     ds >> givenMagic;
     if (result.magic != givenMagic)
         return result;

@@ -82,8 +82,21 @@ void MainWindow::on_pushButton_5_clicked()
 {
     LSBHider lsbHider(this);
     lsbHider.loadBackGround("file.png");
+
+
     lsbHider.addFile("1.jpg");
     lsbHider.save("super.png");
 
     lsbHider.loadBackGround("super.png");
+    QByteArray outputData;
+    for (int i=0; i< 1024; i++)
+        outputData.append(char(0));
+    lsbHider.cursor->reset();
+    for (int i=0; i< 1024; i++)
+        outputData[i] = lsbHider.cursor->readByte();
+    QFile outputDataFile("output.dat");
+    outputDataFile.open(QFile::WriteOnly);
+    outputDataFile.write(outputData);
+    outputDataFile.flush();
+    outputDataFile.close();
 }

@@ -18,7 +18,7 @@ struct LSBHiderFileSystem
 
     QByteArray toByteArray();
 
-    static const int magic = 0xF0F0E0C0;
+    static const uint magic = 0xF0F0E0C0;
     QList<DataDesc> filePointers;
     void addFile(QString name, uint size);
     void removeFile(QString name);
@@ -66,13 +66,14 @@ public:
     QByteArray readData(QString name);
     ~LSBHider();
 
+    ImageLayerCursor * cursor;
+    LSBHiderFileSystem header;
+
 signals:
 
 public slots:
 private:
     QImage * image;
-    ImageLayerCursor * cursor;
-    LSBHiderFileSystem header;
 };
 
 #endif // LSBHIDER_H
