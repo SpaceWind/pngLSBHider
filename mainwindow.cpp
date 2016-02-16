@@ -1,6 +1,7 @@
 #include <QByteArray>
 #include <QFile>
 #include <QFileInfo>
+#include <QFileDialog>
 #include <QMessageBox>
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
@@ -19,84 +20,99 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+
+
+void MainWindow::on_pushButton_3_clicked()
+{
+    QString fileName = QFileDialog::getSaveFileName(this, "Save container","","PNG (*.png)");
+    if (!fileName.isEmpty())
+        hider.save(fileName);
+}
+
 void MainWindow::on_pushButton_clicked()
 {
-    src = QImage("file.png","PNG");
-    out = QImage("file.png","PNG");
-    premultOut = QImage("file.png","PNG");
-    diff = DiffImage::createQuantDeltaEncoded(src,out,ui->spinBox->value());
-    out = DiffImage::recoverQuantDeltaEncoded(diff,ui->spinBox->value());
-    ui->label->setPixmap(QPixmap::fromImage(out));
+    QFileDialog dialog(this);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilter("*.*");
+    QStringList fileNames;
+    if (dialog.exec())
+        fileNames = dialog.selectedFiles();
+    foreach (const QString &str, fileNames)
+    {
+        if (!hider.addFile(str))
+            QMessageBox::warning(this, "ERROR", "File " + str + " cant be stored: not enough space");
+    }
+    drawItems();
+
+    QByteArray firstData;
+    firstData.resize(64000);
+    hider.cursor->reset();
+    for (int i=0; i<64000; i++)
+        firstData[i] = hider.cursor->readByte();
+    QFile f("data.bin");
+    f.open(QFile::WriteOnly);
+    f.write(firstData);
+    f.flush();
+    f.close();
 }
 
-void MainWindow::on_radioButton_clicked()
+void MainWindow::drawItems()
 {
-    ui->label->setPixmap(QPixmap::fromImage(src));
-}
-
-void MainWindow::on_radioButton_2_clicked()
-{
-    ui->label->setPixmap(QPixmap::fromImage(diff));
-}
-
-void MainWindow::on_radioButton_3_clicked()
-{
-    ui->label->setPixmap(QPixmap::fromImage(out));
+    int dataStoredSize = 0;
+    ui->listWidget->clear();
+    foreach (const LSBHiderFileSystem::DataDesc &dd, hider.header.filePointers)
+    {
+        ui->listWidget->addItem(dd.name + "\t:\t[" + QString::number(dd.pointer) +"]\t|" + QString::number(dd.size) +" bytes");
+        dataStoredSize += dd.size;
+    }
+    if (dataStoredSize > 0)
+    {
+        QString totalBytes = QString::number(hider.cursor->state.width * hider.cursor->state.height * 3);
+        ui->groupBox->setTitle("LSB found: wrote " +
+                               QString::number(dataStoredSize) +
+                               "bytes of " + totalBytes + QString(" bytes. [") +
+                               QString::number(dataStoredSize*100/totalBytes.toInt()) + "%]");
+    }
+    else
+        ui->groupBox->setTitle("Empty container");
 }
 
 void MainWindow::on_pushButton_2_clicked()
 {
-    QImage rgbImage = diff.convertToFormat(QImage::Format_RGB888);
-    int size = rgbImage.byteCount();
-    QByteArray data = qCompress(QByteArray::fromRawData((char*)rgbImage.bits(),size),9);
-    out.save("dec.png","PNG");
-    diff.save("diff.png","PNG");
-    QFile outFile("file.pngd");
-    outFile.open(QFile::WriteOnly);
-    outFile.write(data);
-    outFile.flush();
-    outFile.close();
+    if (ui->listWidget->selectedItems().count() > 0)
+        for (int i = 0; i < ui->listWidget->selectedItems().count(); i++)
+            hider.removeFile(ui->listWidget->selectedItems()[i]->text());
 
-    QFileInfo srcFileInfo("file.png");
-    int srcSize = srcFileInfo.size();
-    QMessageBox::information(this, "File Saved", "DIFF file size: " + QString::number(data.size()) + " bytes. Original file size: " + QString::number(srcSize) + " bytes.");
+    drawItems();
 }
 
-void MainWindow::on_radioButton_4_clicked()
+void MainWindow::on_listWidget_doubleClicked(const QModelIndex &index)
 {
-    ui->label->setPixmap(QPixmap::fromImage(premultDiff));
-}
+    int num = index.row();
+    QString filename = ui->listWidget->item(num)->text();
+    QStringList itemTokens = filename.split("\t");
+    filename = itemTokens.first();
+    QByteArray data = hider.readData(filename);
 
-void MainWindow::on_radioButton_5_clicked()
-{
-    ui->label->setPixmap(QPixmap::fromImage(premultOut));
+    if (filename.toLower().contains(".png"))
+    {
+        QImage img = QImage::fromData(data,"PNG");
+        QPixmap pixmap = QPixmap::fromImage(img);
+        ui->label->setPixmap(pixmap);
+    }
+    else if (filename.toLower().contains(".jpg"))
+    {
+        QImage img = QImage::fromData(data,"JPG");
+        QPixmap pixmap = QPixmap::fromImage(img);
+        ui->label->setPixmap(pixmap);
+    }
 }
 
 void MainWindow::on_pushButton_4_clicked()
 {
-    diff = QImage("diff.png","PNG");
-    out = DiffImage::recoverQuantDeltaEncoded(diff,4);
-}
+    QString fileName = QFileDialog::getOpenFileName(this, tr("Open PNG container"), "", tr("Image Files (*.png)"));
+    if (!fileName.isEmpty())
+        hider.loadBackGround(fileName);
+    drawItems();
 
-void MainWindow::on_pushButton_5_clicked()
-{
-    LSBHider lsbHider(this);
-    lsbHider.loadBackGround("file.png");
-
-
-    lsbHider.addFile("1.jpg");
-    lsbHider.save("super.png");
-
-    lsbHider.loadBackGround("super.png");
-    QByteArray outputData;
-    for (int i=0; i< 1024; i++)
-        outputData.append(char(0));
-    lsbHider.cursor->reset();
-    for (int i=0; i< 1024; i++)
-        outputData[i] = lsbHider.cursor->readByte();
-    QFile outputDataFile("output.dat");
-    outputDataFile.open(QFile::WriteOnly);
-    outputDataFile.write(outputData);
-    outputDataFile.flush();
-    outputDataFile.close();
 }

@@ -26,7 +26,6 @@ struct LSBHiderFileSystem
     int getFilePointer(QString name);
 };
 
-
 struct ImageLayerCursor
 {
     ImageLayerCursor(QImage* img);
@@ -61,6 +60,7 @@ public:
     void loadBackGround(QString filename);
     void cacheFiles();
     bool addFile(QString filename);
+    void removeFile(QString filename);
     bool writeData(QByteArray data, QString name);
     void save(QString filename);
     QByteArray readData(QString name);

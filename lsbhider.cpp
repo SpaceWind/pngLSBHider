@@ -1,5 +1,6 @@
 #include <QDataStream>
 #include <QFile>
+#include <QFileInfo>
 #include "lsbhider.h"
 
 ImageLayerCursor::ImageLayerCursor(QImage *img)
@@ -168,6 +169,23 @@ void LSBHider::loadBackGround(QString filename)
         data.append(cursor->readByte());
     }
     header = LSBHiderFileSystem::fromByteArray(data);
+    QFile f("header.bin");
+    f.open(QFile::WriteOnly);
+    f.write(data);
+    f.flush();
+    f.close();
+
+    QByteArray firstData;
+    firstData.resize(9000);
+    cursor->reset();
+    cursor->seek(262144);
+    for (int i = 0; i< 9000; i++)
+        firstData[i] = cursor->readByte();
+    QFile ff("ff.bin");
+    ff.open(QFile::WriteOnly);
+    ff.write(firstData);
+    ff.flush();
+    ff.close();
 }
 
 void LSBHider::cacheFiles()
@@ -185,10 +203,16 @@ bool LSBHider::addFile(QString filename)
 {
     QByteArray data;
     QFile file(filename);
+    QFileInfo info(filename);
     file.open(QFile::ReadOnly);
     data.append(file.readAll());
     file.close();
-    return writeData(data, filename);
+    return writeData(data, info.fileName());
+}
+
+void LSBHider::removeFile(QString filename)
+{
+    header.removeFile(filename);
 }
 
 bool LSBHider::writeData(QByteArray data, QString name)
@@ -268,6 +292,7 @@ LSBHiderFileSystem LSBHiderFileSystem::fromByteArray(QByteArray data)
 QByteArray LSBHiderFileSystem::toByteArray()
 {
     QByteArray result;
+    result.resize(32768);
     QDataStream ds(&result, QIODevice::WriteOnly);
     buildHeader();
     ds << magic;
@@ -307,13 +332,14 @@ void LSBHiderFileSystem::removeFile(QString name)
 void LSBHiderFileSystem::buildHeader()
 {
     int initialPointer = 64;
-    foreach (const DataDesc & dd, filePointers)
+    /*foreach (const DataDesc & dd, filePointers)
     {
         initialPointer += 32;
         initialPointer += dd.name.size() * 2 * 8;
         initialPointer += sizeof(dd.pointer) * 8;
         initialPointer += sizeof(dd.size) * 8;
-    }
+    }*/
+    initialPointer = 32768 * 8;
 
     for (auto i = filePointers.begin(); i!= filePointers.end(); ++i)
     {
